@@ -1,0 +1,1 @@
+- this job is setup to connect to mongodb on OP1 server and copy the data iteratively into ELK running on loki for data monitoring and analysis.

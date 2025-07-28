@@ -1,0 +1,16 @@
+rncryptor
+pymongo
+apache-airflow-providers-mongo
+tqdm
+# pathos
+# numpy
+# dateutils
+# pandas
+# geopy
+# idict
+# pymongo==4.3.3
+# pymongo[zstd]
+# pymongo[srv]
+# matplotlib
+# psycopg2-binary
+# shelchemy==0.220906.2
