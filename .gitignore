@@ -1,3 +1,5 @@
 .env
 # ignore all files in the logs directory
 logs/*
+config/airflow.cfg
+
