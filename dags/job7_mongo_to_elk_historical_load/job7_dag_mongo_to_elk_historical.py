@@ -4,7 +4,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 from datetime import datetime
-from job7_mongo_to_elk_historical_load.mongo_elk_loader import copy_documents_from_mongodb_to_elastic_search
+from job7_mongo_to_elk_historical_load.job7_task1_mongo_elk_loader import copy_documents_from_mongodb_to_elastic_search
 
 var_config = Variable.get("mongo_to_elk_historical_config", deserialize_json=True)
 

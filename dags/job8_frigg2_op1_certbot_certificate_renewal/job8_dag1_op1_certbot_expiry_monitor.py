@@ -14,11 +14,11 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='certbot_expiry_monitor',
+    dag_id='op1_certbot_expiry_monitor',
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
-    tags=['certbot', 'monitoring'],
+    tags=['certbot', 'monitoring', 'op1'],
 )
 
 
@@ -45,7 +45,7 @@ def parse_certbot_output(ti):
 
     days_left = (expiry_date - datetime.now(expiry_date.tzinfo)).days
     alert_threshold = 7
-    email_list = ['mohd.muzamil.08@gmail.com', 'sm585558@dal.ca']
+    email_list = ['mohd.muzamil.08@gmail.com']
 
     if days_left < alert_threshold:
         subject = f"[ALERT] OP1 SSL Certificate expiring in {days_left} days"
