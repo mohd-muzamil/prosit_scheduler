@@ -3,9 +3,6 @@
 logs/*
 config/airflow.cfg
 
-<<<<<<< HEAD
-# ignore fiels in job9_op1_audio_daily_pipeline/audio_combined/* and job9_op1_audio_daily_pipeline/vidar_sync/*
-job9_op1_audio_daily_pipeline/audio_combined/*
-job9_op1_audio_daily_pipeline/vidar_sync/*
-=======
->>>>>>> cde42bf11f0fcca9f11673770d8db4b13467a1fe
+# ignore files in job9_op1_audio_daily_pipeline directories recursively
+dags/job9_op1_audio_daily_pipeline/audio_combined/
+dags/job9_op1_audio_daily_pipeline/vidar_sync/

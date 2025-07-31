@@ -1,11 +1,12 @@
 # Job9 Audio Pipeline Deployment Guide
 
 ## Overview
-Job9 is an Airflow DAG that processes audio files from the op1 server and syncs them to vidar.research.cs.dal.ca. The pipeline consists of three main steps:
+Job9 is an Airflow DAG that processes audio files from the op1 server and syncs them to vidar.research.cs.dal.ca. The pipeline consists of four main steps:
 
-1. **Download**: Downloads encrypted .aac files from op1 server
+1. **Download**: Downloads encrypted .aac files from op1 server (integrated as PythonOperator)
 2. **Decrypt/Convert**: Decrypts and converts files to WAV format
-3. **Sync**: Uploads WAV files to nathan@vidar.research.cs.dal.ca:/home/audio/
+3. **Prepare**: Organizes WAV files for sync to vidar
+4. **Sync**: Uploads WAV files to nathan@vidar.research.cs.dal.ca:/home/nathan/op1_audio_files/
 
 ## Prerequisites
 
@@ -19,21 +20,27 @@ mkdir -p /home/prositadmin/audio_processing/audio_combined/{encrypted,decrypted,
 Set the required Airflow variable:
 ```bash
 # In Airflow UI or CLI:
-airflow variables set op1_audio_secret_key "your_secret_key_here"
+airflow variables set AUDIO_SECRET_KEY "your_secret_key_here"
 ```
 
+**Note**: The variable name has been changed from `op1_audio_secret_key` to `AUDIO_SECRET_KEY` to match the updated implementation.
+
 ### 3. SSH Key Authentication
-Set up SSH key authentication for rsync to work without password prompts:
+Set up SSH key authentication for both op1 and vidar servers:
 
 ```bash
 # Generate SSH key if not exists
 ssh-keygen -t rsa -b 4096 -C "prositadmin@prosit_scheduler"
 
-# Copy public key to vidar server
+# Copy public key to op1 server (for download step)
+ssh-copy-id prositadmin@op1.research.cs.dal.ca
+
+# Copy public key to vidar server (for sync step)
 ssh-copy-id nathan@vidar.research.cs.dal.ca
 
-# Test connection
-ssh nathan@vidar.research.cs.dal.ca "echo 'SSH connection successful'"
+# Test connections
+ssh prositadmin@op1.research.cs.dal.ca "echo 'OP1 SSH connection successful'"
+ssh nathan@vidar.research.cs.dal.ca "echo 'Vidar SSH connection successful'"
 ```
 
 ### 4. Dependencies
@@ -61,29 +68,34 @@ sudo apt-get install ffmpeg
 - **Tags**: `['audio', 'op1', 'sync']`
 
 ### File Paths
-- **Download Script**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_audio_daily_pipeline/op1_download_audio_files.sh`
-- **Conversion Script**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_audio_daily_pipeline/op1_decrypt_convert_to_wav.py`
-- **Working Directory**: `/home/prositadmin/audio_processing/audio_combined/`
-- **Sync Destination**: `nathan@vidar.research.cs.dal.ca:/home/audio/`
+- **Main DAG**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_op1_audio_daily_pipeline/job9_dag_audio_daily_pipeline.py`
+- **Download Task**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_op1_audio_daily_pipeline/job9_task1_download_op1_audio_files.py`
+- **Conversion Task**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_op1_audio_daily_pipeline/job9_task2_decrypt_convert_acc_to_wav.py`
+- **Prepare Task**: `/home/prositadmin/apps/prosit_scheduler/dags/job9_op1_audio_daily_pipeline/job9_task3_prepare_vidar_wav_sync.py`
+- **Working Directory**: `/opt/airflow/dags/job9_op1_audio_daily_pipeline/`
+- **Sync Destination**: `nathan@vidar.research.cs.dal.ca:/home/nathan/op1_audio_files/`
 
 ## Deployment Steps
 
 ### 1. Verify DAG Syntax
 ```bash
-cd /home/prositadmin/apps/prosit_scheduler/dags/job9_audio_daily_pipeline/
-python3 -m py_compile audio_daily_pipeline.py
+cd /home/prositadmin/apps/prosit_scheduler/dags/job9_op1_audio_daily_pipeline/
+python3 -m py_compile job9_dag_audio_daily_pipeline.py
 ```
 
 ### 2. Test Individual Components
 ```bash
-# Test download script syntax
-bash -n op1_download_audio_files.sh
+# Test download task
+python3 -m py_compile job9_task1_download_op1_audio_files.py
 
-# Test conversion script syntax
-python3 -m py_compile op1_decrypt_convert_to_wav.py
+# Test conversion task
+python3 -m py_compile job9_task2_decrypt_convert_acc_to_wav.py
 
-# Run comprehensive test
-python3 test_job9_pipeline.py
+# Test prepare task
+python3 -m py_compile job9_task3_prepare_vidar_wav_sync.py
+
+# Test download functionality manually
+python3 job9_task1_download_op1_audio_files.py
 ```
 
 ### 3. Enable DAG in Airflow
@@ -95,15 +107,17 @@ python3 test_job9_pipeline.py
 ## Monitoring
 
 ### Log Files
-- **Conversion Log**: `/home/prositadmin/audio_processing/op1_decrypt_convert_to_wav.log`
-- **Airflow Task Logs**: Available in Airflow UI
+- **Airflow Task Logs**: Available in Airflow UI for all tasks (download, decrypt/convert, prepare, sync)
+- **Individual Task Logs**: Each PythonOperator logs to Airflow's standard logging system
 
 ### Key Metrics to Monitor
-- Number of files downloaded
+- Number of files downloaded from op1 server
+- File organization by study prefix (prositms, prositps, etc.)
 - Decryption success rate
 - Conversion success rate
-- Sync completion status
-- Disk space usage in `/home/prositadmin/audio_processing/`
+- File preparation for sync
+- Sync completion status to vidar
+- Disk space usage in `/opt/airflow/dags/job9_op1_audio_daily_pipeline/`
 
 ## Troubleshooting
 
@@ -120,7 +134,7 @@ python3 test_job9_pipeline.py
 #### 3. Decryption Failures
 **Error**: `Decryption failed`
 **Solutions**:
-- Verify `op1_audio_secret_key` Airflow variable is set correctly
+- Verify `AUDIO_SECRET_KEY` Airflow variable is set correctly
 - Check if source files are properly encrypted
 - Verify file format matches expected JSON structure
 
@@ -131,34 +145,47 @@ python3 test_job9_pipeline.py
 - Check if decrypted files are valid audio format
 - Verify sufficient disk space
 
-#### 5. Sync Failures
+#### 5. Download Failures
+**Error**: SSH connection to op1 server fails
+**Solutions**:
+- Test SSH connection: `ssh prositadmin@op1.research.cs.dal.ca`
+- Verify SSH key is properly configured for op1 server
+- Check if Docker container `prosit_universal_api` is running on op1
+- Verify network connectivity to op1.research.cs.dal.ca
+
+#### 6. Sync Failures
 **Error**: `rsync` connection issues
 **Solutions**:
-- Test SSH connection manually
-- Verify destination directory exists on vidar server
-- Check network connectivity
+- Test SSH connection: `ssh nathan@vidar.research.cs.dal.ca`
+- Verify destination directory `/home/nathan/op1_audio_files/` exists on vidar server
+- Check network connectivity to vidar.research.cs.dal.ca
 
 ### Manual Testing Commands
 ```bash
-# Test SSH connection
-ssh nathan@vidar.research.cs.dal.ca "ls -la /home/audio/"
+# Test SSH connections
+ssh prositadmin@op1.research.cs.dal.ca "echo 'OP1 connection OK'"
+ssh nathan@vidar.research.cs.dal.ca "ls -la /home/nathan/op1_audio_files/"
 
-# Test rsync (dry run)
-rsync -avz --dry-run /home/prositadmin/audio_processing/audio_combined/wav/ nathan@vidar.research.cs.dal.ca:/home/audio/
+# Test Docker container access on op1
+ssh prositadmin@op1.research.cs.dal.ca "docker exec prosit_universal_api ls /usr/src/prosit_universal_app/uploads"
+
+# Test rsync to vidar (dry run)
+rsync -avz --dry-run /opt/airflow/dags/job9_op1_audio_daily_pipeline/vidar_sync/op1_audio_files/ nathan@vidar.research.cs.dal.ca:/home/nathan/op1_audio_files/
 
 # Check disk space
-df -h /home/prositadmin/audio_processing/
+df -h /opt/airflow/dags/job9_op1_audio_daily_pipeline/
 
-# View recent logs
-tail -f /home/prositadmin/audio_processing/op1_decrypt_convert_to_wav.log
+# View Airflow task logs
+airflow tasks log audio_pipeline_op1_to_vidar download_audio_files <execution_date>
 ```
 
 ## Performance Considerations
 
 ### Disk Space Management
-- Monitor `/home/prositadmin/audio_processing/` disk usage
+- Monitor `/opt/airflow/dags/job9_op1_audio_daily_pipeline/` disk usage
 - Consider implementing cleanup of old processed files
 - Archive or compress older audio files if needed
+- Monitor temporary directories used during processing
 
 ### Processing Time
 - Large batches may take significant time
@@ -172,10 +199,11 @@ tail -f /home/prositadmin/audio_processing/op1_decrypt_convert_to_wav.log
 
 ## Security Notes
 
-- Secret key is stored in Airflow Variables (encrypted at rest)
-- SSH keys should be properly secured with appropriate permissions
+- Secret key is stored in Airflow Variables as `AUDIO_SECRET_KEY` (encrypted at rest)
+- SSH keys should be properly secured with appropriate permissions for both op1 and vidar servers
 - Consider rotating SSH keys periodically
-- Monitor access logs on vidar server
+- Monitor access logs on both op1 and vidar servers
+- Docker container access on op1 server is secured through SSH key authentication
 
 ## Maintenance
 
