@@ -1,3 +1,8 @@
 .env
 # ignore all files in the logs directory
 logs/*
+config/airflow.cfg
+
+# ignore fiels in job9_op1_audio_daily_pipeline/audio_combined/* and job9_op1_audio_daily_pipeline/vidar_sync/*
+job9_op1_audio_daily_pipeline/audio_combined/*
+job9_op1_audio_daily_pipeline/vidar_sync/*

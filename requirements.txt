@@ -2,6 +2,8 @@ rncryptor
 pymongo
 apache-airflow-providers-mongo
 tqdm
+pydub
+ffmpeg
 # pathos
 # numpy
 # dateutils
@@ -14,3 +16,4 @@ tqdm
 # matplotlib
 # psycopg2-binary
 # shelchemy==0.220906.2
+
